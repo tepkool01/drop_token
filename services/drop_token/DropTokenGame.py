@@ -2,7 +2,7 @@ from utilities.errors import MalformedRequest
 from typing import List
 
 
-class DropToken(object):
+class DropTokenGame(object):
     """
     Class that controls the major components of game logic
     """
@@ -13,8 +13,11 @@ class DropToken(object):
         self.column_count = x  # A count of how many columns the board has
 
         self.current_move = None  # A dict of the column and row position of a dropped token
-        self.current_player_token = 1  # Identifier for the player, None, 0, or 1; 0 == player 1, 1 == player 2
+        self.current_player_token = None  # Identifier for the player, None, 0, or 1; 0 == player 1, 1 == player 2
         self.win_length = 4  # Size of consecutive tokens to determine a win
+
+    def set_player(self, player_token):
+        self.current_player_token = player_token
 
     @staticmethod
     def generate_board(x: int, y: int) -> List[List[None]]:

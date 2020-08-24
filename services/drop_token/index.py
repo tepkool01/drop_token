@@ -4,7 +4,7 @@ import os
 import boto3
 
 # Custom libraries
-from utilities.errors import MalformedRequest
+from utilities.errors import MalformedRequest, NotFound
 from DropTokenSession import DropTokenSession
 
 # Caching area
@@ -52,11 +52,21 @@ def lambda_handler(event, _):
         elif event['resource'] == '/drop_token/{gameId}/{playerId}':
             if event['method'] == 'DELETE':
                 return 'Player terminated session'
+
+            # Player is making a move! This is where the fun happens!
             elif event['method'] == 'POST':
-                return 'Player posted a move'
+                move = dt_session.create_move()
+                return move
+
+    # Begin the handling of errors sent from the game session or game
     except MalformedRequest as e:
-        raise({
+        raise Exception({
             "reason": "BAD_REQUEST",
+            "message": str(e)
+        })
+    except NotFound as e:
+        raise Exception({
+            "reason": "NOT_FOUND",
             "message": str(e)
         })
 
