@@ -1,0 +1,21 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Initial bootstrapping of environment so the infrastructure can succeed"
+
+Parameters:
+  ArtifactsBucketName:
+    Description: "The base location of all the artifacts being used to spin up the environment"
+    Type: String
+    Default: "drop-token-artifacts"
+
+Resources:
+  # Location of all the code, API swagger, etc
+  ArtifactsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref ArtifactsBucketName
+
+Outputs:
+  DropTokenBucketName:
+    Value: !Ref ArtifactsBucketName
+    Export:
+      Name: "DropTokenBucketName"
