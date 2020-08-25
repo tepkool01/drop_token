@@ -4,6 +4,7 @@ import json
 
 # Custom libraries
 from utilities.errors import MalformedRequest, NotFound, Conflict, GameFinished
+from utilities.GameState import GameState
 from DropTokenSession import DropTokenSession
 from utilities.Validation import Validation
 
@@ -46,11 +47,15 @@ def lambda_handler(event, _):
         elif event['resource'] == '/drop_token/{gameId}':
             # Retrieve one single game and all the related information
             if event['method'] == 'GET':
-                return {
+                game_response = {
                     "players": game_info['players'],
                     "state": game_info['state'],
                     "winner": game_info['winner']
                 }
+                # Per specification, no winner property should exist in an ACTIVE game
+                if game_response['state'] == GameState.ACTIVE.val():
+                    del game_response['winner']
+                return game_response
 
         elif event['resource'] == '/drop_token/{gameId}/moves':
             # Retrieves an array (all, or a subset) of player moves for a specified game
@@ -86,7 +91,7 @@ def lambda_handler(event, _):
             # Player is a sore loser or forgot to feed the cat, they are leaving the game, an entry in moves is recorded
             if event['method'] == 'DELETE':
                 dt_session.quit_game()
-                return ''
+                return
 
             # Player is making a move! This is where the fun happens!
             elif event['method'] == 'POST':

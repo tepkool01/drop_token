@@ -127,6 +127,11 @@ class DropTokenSession(object):
         # Retrieve the resultant state of the move just made
         board_state, winner, state = self.get_win_state()
 
+        # If this is the final move, and a winner hasn't been declared, we will mark the game as DONE
+        total_possible_moves = int(self.game_data['columns']) * int(self.game_data['rows'])
+        if len(winner) == 0 and num + 1 >= total_possible_moves:
+            state = GameState.COMPLETE.val()
+
         # Update the database accordingly
         self.db.update_item(
             Key={'gameId': self.event['gameId']},
