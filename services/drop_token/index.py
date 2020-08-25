@@ -49,8 +49,9 @@ def lambda_handler(event, _):
                 return game
 
         elif event['resource'] == '/drop_token/{gameId}/moves':
+            # Retrieves an array (all, or a subset) of player moves for a specified game
             if event['method'] == 'GET':
-                # Validate if we received the OPTIONAL query string parameters. Both must be present
+                # VALIDATE if we received the OPTIONAL query string parameters. Both must be present
                 if 'start' in event and 'until' in event:
                     validate.unsigned_integer_values(event['start'], event['until'])
                     validate.valid_query_range(event['start'], event['until'])
@@ -65,8 +66,14 @@ def lambda_handler(event, _):
                 }
 
         elif event['resource'] == '/drop_token/{gameId}/moves/{move_number}':
+            # Retrieves a single move
             if event['method'] == 'GET':
-                return 'Specific move'
+                # VALIDATE that we have an unsigned integer path parameter
+                validate.unsigned_integer_values(event['move_number'])
+
+                # Repurposing the array of moves, because array slicing will still work here
+                move = dt_session.retrieve_moves(int(event['move_number']), int(event['move_number'])+1)
+                return move[0]
 
         elif event['resource'] == '/drop_token/{gameId}/{playerId}':
             # VALIDATE: Game is not in 'DONE' state
