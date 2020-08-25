@@ -119,9 +119,11 @@ Resources:
             openapi: "3.0.1"
             info:
               title: "98point6-3"
+              description: "An API interface to facilitate a game session of drop token to back\
+                \ end services."
               version: "2020-08-19T23:44:29Z"
             servers:
-            - url: "https://xxx.execute-api.${AWS::Region}.amazonaws.com/{basePath}"
+            - url: "https://yu0eimm757.execute-api.${AWS::Region}.amazonaws.com/{basePath}"
               variables:
                 basePath:
                   default: "/dev"
@@ -159,7 +161,6 @@ Resources:
                           schema:
                             $ref: "#/components/schemas/ResponseGetMove"
                   x-amazon-apigateway-integration:
-                    type: "aws"
                     uri: "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${LambdaName}/invocations"
                     responses:
                       default:
@@ -181,6 +182,7 @@ Resources:
                     passthroughBehavior: "when_no_templates"
                     httpMethod: "POST"
                     contentHandling: "CONVERT_TO_TEXT"
+                    type: "aws"
               /drop_token/{gameId}:
                 get:
                   parameters:
@@ -209,7 +211,6 @@ Resources:
                           schema:
                             $ref: "#/components/schemas/ResponseGetGame"
                   x-amazon-apigateway-integration:
-                    type: "aws"
                     uri: "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${LambdaName}/invocations"
                     responses:
                       default:
@@ -231,66 +232,7 @@ Resources:
                     passthroughBehavior: "when_no_templates"
                     httpMethod: "POST"
                     contentHandling: "CONVERT_TO_TEXT"
-              /drop_token:
-                get:
-                  responses:
-                    200:
-                      description: "200 response"
-                      content:
-                        application/json:
-                          schema:
-                            $ref: "#/components/schemas/ResponseGetGames"
-                  x-amazon-apigateway-integration:
                     type: "aws"
-                    uri: "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${LambdaName}/invocations"
-                    responses:
-                      default:
-                        statusCode: "200"
-                    requestTemplates:
-                      application/json: "{\n    \"resource\": \"$context.resourcePath\",\n   \
-                        \ \"method\": \"$context.httpMethod\"\n}"
-                    passthroughBehavior: "when_no_templates"
-                    httpMethod: "POST"
-                    contentHandling: "CONVERT_TO_TEXT"
-                post:
-                  requestBody:
-                    content:
-                      application/json:
-                        schema:
-                          $ref: "#/components/schemas/RequestCreateGame"
-                    required: true
-                  responses:
-                    400:
-                      description: "400 response"
-                      content:
-                        application/json:
-                          schema:
-                            $ref: "#/components/schemas/Error"
-                    200:
-                      description: "200 response"
-                      content:
-                        application/json:
-                          schema:
-                            $ref: "#/components/schemas/ResponseCreateGame"
-                  x-amazon-apigateway-request-validator: "Validate body"
-                  x-amazon-apigateway-integration:
-                    type: "aws"
-                    uri: "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${LambdaName}/invocations"
-                    responses:
-                      default:
-                        statusCode: "200"
-                      .*BAD_REQUEST.*:
-                        statusCode: "400"
-                        responseTemplates:
-                          application/json: "#set($errorMessageObj  = $util.parseJson($input.path('$.errorMessage')))\r\
-                            \n{\r\n  \"message\" : \"$errorMessageObj.message\"\r\n}"
-                    requestTemplates:
-                      application/json: "{\n    \"resource\": \"$context.resourcePath\",\n   \
-                        \ \"method\": \"$context.httpMethod\",\n    \"body\": $input.json('$')\n\
-                        }"
-                    passthroughBehavior: "when_no_templates"
-                    httpMethod: "POST"
-                    contentHandling: "CONVERT_TO_TEXT"
               /drop_token/{gameId}/{playerId}:
                 post:
                   parameters:
@@ -323,6 +265,9 @@ Resources:
                         application/json:
                           schema:
                             $ref: "#/components/schemas/ResponseCreateMove"
+                    410:
+                      description: "410 response"
+                      content: {}
                     400:
                       description: "400 response"
                       content:
@@ -337,7 +282,6 @@ Resources:
                             $ref: "#/components/schemas/Error"
                   x-amazon-apigateway-request-validator: "Validate body"
                   x-amazon-apigateway-integration:
-                    type: "aws"
                     uri: "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${LambdaName}/invocations"
                     responses:
                       .*BAD_REQUEST.*:
@@ -357,6 +301,11 @@ Resources:
                         responseTemplates:
                           application/json: "#set($errorMessageObj  = $util.parseJson($input.path('$.errorMessage')))\r\
                             \n{\r\n  \"message\" : \"$errorMessageObj.message\"\r\n}"
+                      .*GONE.*:
+                        statusCode: "410"
+                        responseTemplates:
+                          application/json: "#set($errorMessageObj  = $util.parseJson($input.path('$.errorMessage')))\r\
+                            \n{\r\n  \"message\" : \"$errorMessageObj.message\"\r\n}"
                     requestTemplates:
                       application/json: "{\r\n    \"resource\": \"$context.resourcePath\",\r\n\
                         \    \"method\": \"$context.httpMethod\",\r\n    \"gameId\": \"$input.params('gameId')\"\
@@ -365,6 +314,7 @@ Resources:
                     passthroughBehavior: "when_no_templates"
                     httpMethod: "POST"
                     contentHandling: "CONVERT_TO_TEXT"
+                    type: "aws"
                 delete:
                   parameters:
                   - name: "playerId"
@@ -394,7 +344,6 @@ Resources:
                           schema:
                             $ref: "#/components/schemas/Error"
                   x-amazon-apigateway-integration:
-                    type: "aws"
                     uri: "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${LambdaName}/invocations"
                     responses:
                       default:
@@ -416,6 +365,67 @@ Resources:
                     passthroughBehavior: "when_no_templates"
                     httpMethod: "POST"
                     contentHandling: "CONVERT_TO_TEXT"
+                    type: "aws"
+              /drop_token:
+                get:
+                  responses:
+                    200:
+                      description: "200 response"
+                      content:
+                        application/json:
+                          schema:
+                            $ref: "#/components/schemas/ResponseGetGames"
+                  x-amazon-apigateway-integration:
+                    uri: "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${LambdaName}/invocations"
+                    responses:
+                      default:
+                        statusCode: "200"
+                    requestTemplates:
+                      application/json: "{\n    \"resource\": \"$context.resourcePath\",\n   \
+                        \ \"method\": \"$context.httpMethod\"\n}"
+                    passthroughBehavior: "when_no_templates"
+                    httpMethod: "POST"
+                    contentHandling: "CONVERT_TO_TEXT"
+                    type: "aws"
+                post:
+                  requestBody:
+                    content:
+                      application/json:
+                        schema:
+                          $ref: "#/components/schemas/RequestCreateGame"
+                    required: true
+                  responses:
+                    400:
+                      description: "400 response"
+                      content:
+                        application/json:
+                          schema:
+                            $ref: "#/components/schemas/Error"
+                    200:
+                      description: "200 response"
+                      content:
+                        application/json:
+                          schema:
+                            $ref: "#/components/schemas/ResponseCreateGame"
+                  x-amazon-apigateway-request-validator: "Validate body"
+                  x-amazon-apigateway-integration:
+                    uri: "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${LambdaName}/invocations"
+                    responses:
+                      default:
+                        statusCode: "200"
+                      .*BAD_REQUEST.*:
+                        statusCode: "400"
+                        responseTemplates:
+                          application/json: "#set($errorMessageObj  = $util.parseJson($input.path('$.errorMessage')))\r\
+                            \n{\r\n  \"message\" : \"$errorMessageObj.message\"\r\n}"
+                    requestTemplates:
+                      application/json: "{\n    \"resource\": \"$context.resourcePath\",\n   \
+                        \ \"method\": \"$context.httpMethod\",\n    \"body\": $input.json('$')\n\
+                        }"
+                    passthroughBehavior: "when_no_templates"
+                    httpMethod: "POST"
+                    contentHandling: "CONVERT_TO_TEXT"
+                    type: "aws"
               /drop_token/{gameId}/moves:
                 get:
                   parameters:
@@ -452,8 +462,7 @@ Resources:
                           schema:
                             $ref: "#/components/schemas/ResponseGetMoves"
                   x-amazon-apigateway-integration:
-                    type: "aws"
-                    uri: "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:878527066650:function:drop-token/invocations"
+                    uri: "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${LambdaName}/invocations"
                     responses:
                       default:
                         statusCode: "200"
@@ -475,6 +484,7 @@ Resources:
                     passthroughBehavior: "when_no_templates"
                     httpMethod: "POST"
                     contentHandling: "CONVERT_TO_TEXT"
+                    type: "aws"
             components:
               schemas:
                 ResponseCreateMove:
@@ -491,6 +501,7 @@ Resources:
                       type: "string"
                     column:
                       type: "integer"
+                      format: "int32"
                 ResponseCreateGame:
                   type: "object"
                   properties:
@@ -538,8 +549,10 @@ Resources:
                         type: "string"
                     columns:
                       type: "integer"
+                      format: "int32"
                     rows:
                       type: "integer"
+                      format: "int32"
                 RequestCreateMove:
                   required:
                   - "column"
@@ -547,6 +560,7 @@ Resources:
                   properties:
                     column:
                       type: "integer"
+                      format: "int32"
                 ResponseGetMoves:
                   type: "object"
                   properties:
@@ -562,11 +576,11 @@ Resources:
                             type: "string"
                           column:
                             type: "integer"
+                            format: "int32"
             x-amazon-apigateway-request-validators:
               Validate body:
                 validateRequestParameters: false
                 validateRequestBody: true
-
           - LambdaName: !Ref DropTokenLambda
 
 Outputs:

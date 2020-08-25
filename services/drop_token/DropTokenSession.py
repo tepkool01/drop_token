@@ -29,7 +29,8 @@ class DropTokenSession(object):
                 'players': self.event['body']['players'],
                 'rows': self.event['body']['rows'],
                 'columns': self.event['body']['columns'],
-                'moves': []
+                'moves': [],
+                'winner': ''
             }
         )
         return game_id
@@ -66,7 +67,7 @@ class DropTokenSession(object):
         except Exception as _:
             raise NotFound("Game not found.")
 
-    def retrieve_moves(self, start: int = '', until: int = '') -> []:
+    def retrieve_moves(self, start: int = None, until: int = None) -> []:
         """
         Retrieves the game moves, with optional query string parameters that can select a subset of moves in the array
         :param start: the starting position of the slice of the moves array
@@ -76,7 +77,11 @@ class DropTokenSession(object):
         # Takes a slice of the moves, if start and until are blank, it selects the whole array
         moves = self.game_data['moves'][start:until]
         if len(moves) == 0:
-            raise NotFound("No moves found.")
+            raise NotFound('No moves found.')
+
+        # todo: not sure why this is happening right now, but move numbers are being returned as floats
+        for item in moves:
+            item['column'] = int(item['column'])
         return moves
 
     def quit_game(self) -> None:
@@ -157,7 +162,7 @@ class DropTokenSession(object):
         dt.set_move(self.event['body']['column'])
 
         # Perform check only if there are the required amount of moves to win
-        if len(self.game_data['moves']) >= len(self.game_data['players']) * dt.win_length:
+        if len(self.game_data['moves']) >= (len(self.game_data['players']) * dt.win_length) - 1:
             win_state = dt.get_win_state()
         else:
             win_state = False

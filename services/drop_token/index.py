@@ -1,5 +1,6 @@
 import os
 import boto3
+import json
 
 # Custom libraries
 from utilities.errors import MalformedRequest, NotFound, Conflict, GameFinished
@@ -45,14 +46,17 @@ def lambda_handler(event, _):
         elif event['resource'] == '/drop_token/{gameId}':
             # Retrieve one single game and all the related information
             if event['method'] == 'GET':
-                game = dt_session.get_game()
-                return game
+                return {
+                    "players": game_info['players'],
+                    "state": game_info['state'],
+                    "winner": game_info['winner']
+                }
 
         elif event['resource'] == '/drop_token/{gameId}/moves':
             # Retrieves an array (all, or a subset) of player moves for a specified game
             if event['method'] == 'GET':
                 # VALIDATE if we received the OPTIONAL query string parameters. Both must be present
-                if 'start' in event and 'until' in event:
+                if len(event['start']) > 0 and len(event['until']) > 0:
                     validate.unsigned_integer_values(event['start'], event['until'])
                     validate.valid_query_range(event['start'], event['until'])
 
@@ -86,34 +90,40 @@ def lambda_handler(event, _):
 
             # Player is making a move! This is where the fun happens!
             elif event['method'] == 'POST':
+                # VALIDATE: Move is an unsigned integer
+                validate.unsigned_integer_values(event['body']['column'])
+
+                # VALIDATE: Move is between designated column numbers (re-purposing the validator, logic is similar)
+                validate.valid_query_range(event['body']['column'], int(game_info['columns'])-1)
+
                 move = dt_session.create_move()
                 return move
 
     # Begin the handling of errors sent from the game session or game
     except MalformedRequest as e:
-        raise Exception({
+        raise Exception(json.dumps({
             "reason": "BAD_REQUEST",
             "message": str(e)
-        })
+        }))
     except NotFound as e:
-        raise Exception({
+        raise Exception(json.dumps({
             "reason": "NOT_FOUND",
             "message": str(e)
-        })
+        }))
     except Conflict as e:
-        raise Exception({
+        raise Exception(json.dumps({
             "reason": "CONFLICT",
             "message": str(e)
-        })
+        }))
     except GameFinished as e:
-        raise Exception({
+        raise Exception(json.dumps({
             "reason": "GONE",
             "message": str(e)
-        })
+        }))
     # General exception case for anything I can't catch, so we don't release important information
     except Exception as e:
         print(str(e))  # Normally would do a log level here
-        raise Exception({
-            "reason": "Unhandled Exception",
+        raise Exception(json.dumps({
+            "reason": "EXCEPTION",
             "message": "See logs for details."
-        })
+        }))
