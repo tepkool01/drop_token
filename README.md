@@ -24,6 +24,13 @@ This infrastructure and code will allow for game sessions to validate moves and 
 9. Check the outputs tab for the BASE URL of the API
 10. Invoke endpoints using postman/curl/etc (just can't be a CORS service)
 
+### Cleanup
+I apologize I didn't create a better clean-up process.
+1. Navigate to the S3 bucket created by CloudFormation
+2. Delete the s3 key: lambda.zip
+3. Delete the s3 bucket
+4. Delete the stack from CloudFormation
+
 ## Notes / Tips
 - All the code for the business logic is located in `./services/drop_token`
 - Placing the open api yml file into **https://editor.swagger.io/** will give developers a GUI to view the file
