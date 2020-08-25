@@ -20,13 +20,134 @@ Parameters:
       - "prod"
     Default: "dev"
 Resources:
-  # Creates the actual lambda that will be the business logic for all API invocations
-  DropTokenLambda:
+  ###
+  ### START LAMBDA CODE DEPLOYMENT INFRASTRUCTURE
+  ###
+
+  # Bucket where the code (zip) file is stored
+  ArtifactsBucket:
+    Type: AWS::S3::Bucket
+
+  # This resource automatically calls the lambda that will put the code into the S3 bucket
+  DeployLambdaCaller:
+    DependsOn: DeployLambda
+    Type: Custom::LambdaDeployer
+    Properties:
+      ServiceToken: !GetAtt DeployLambda.Arn
+
+  # Grabs the code from the public GitHub, zips up the correct folder, and deploys it to S3 as a zip that the lambda
+  # can later reference
+  DeployLambda:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: "drop-token"
       Handler: index.lambda_handler
-      Description: "TODO:"
+      Description: "Sets up S3 bucket with lambda code from GitHub"
+      MemorySize: !Ref LambdaMemory
+      Runtime: python3.7
+      Role: !GetAtt DeployRole.Arn
+      Environment:
+        Variables:
+          S3_BUCKET: !Ref ArtifactsBucket
+      Code:
+        ZipFile: |
+          from botocore.vendored import requests
+          import zipfile
+          import shutil
+          import boto3
+          import os
+          import json
+
+          s3 = boto3.resource('s3')
+
+          def lambda_handler(event, context):
+              print(event)
+              try:
+                  # Retrieve github zip
+                  r = requests.get('https://github.com/tepkool01/drop_token/archive/master.zip')
+                  open('/tmp/master.zip', 'wb').write(r.content)
+                  with zipfile.ZipFile('/tmp/master.zip', 'r') as zip_ref:
+                      zip_ref.extractall('/tmp/dt')
+
+                  # Create new zip
+                  shutil.make_archive('/tmp/lambda', 'zip', '/tmp/dt/drop_token-master/services/drop_token')
+
+                  # Upload zip to s3
+                  s3.meta.client.upload_file('/tmp/lambda.zip', os.environ['S3_BUCKET'], 'lambda.zip')
+              except Exception as e:
+                  print(str(e))
+
+
+              response_data = {}
+              print(event)
+
+              response_url = event.get('ResponseURL', None)
+              response_data['StackId'] = event.get('StackId', None)
+              response_data['RequestId'] = event.get('RequestId', None)
+              response_data['LogicalResourceId'] = event.get('LogicalResourceId', "")
+              response_data['PhysicalResourceId'] = event.get('PhysicalResourceId', f"{context.function_name}-{context.function_version}")
+              response_data['Data'] = {}
+              response_data['Reason'] = f"More information in CloudWatch."
+              response_data['Status'] = "SUCCESS"
+
+              json_response = json.dumps(response_data)
+              headers = {'content-type': '', 'content-length': str(len(json_response))}
+              try:
+                  response = requests.put(response_url, data=json_response, headers=headers)
+                  print(f"CloudFormation returned status code: {response.reason}")
+              except Exception as e:
+                  print(f"send(..) failed executing requests.put(..): {e}")
+                  raise
+
+              return response_data
+
+  # Role for the custom resource to automatically send the code to the S3 Bucket created
+  DeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: 's3:PutObject'
+                Resource: !Sub "${ArtifactsBucket.Arn}/*"
+        - PolicyName: LogCreation
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+
+  ###
+  ### FINISH LAMBDA CODE DEPLOYMENT INFRASTRUCTURE
+  ###
+
+  ###
+  ### START REGULAR INFRASTRUCTURE PROVISIONING (Lambda/Code, API, Database)
+  ###
+
+  # Creates the actual lambda that will be the business logic for all API invocations
+  DropTokenLambda:
+    DependsOn: DeployLambdaCaller
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.lambda_handler
+      Description: "The main business logic of the drop token game."
       MemorySize: !Ref LambdaMemory
       Runtime: python3.7
       Role: !GetAtt DropTokenRole.Arn
@@ -34,14 +155,8 @@ Resources:
         Variables:
           DATABASE_NAME: !Ref DropTokenDatabase
       Code:
-        ZipFile: |
-            import json
-
-            print('Loading function')
-
-
-            def lambda_handler(event, context):
-              return "Test"
+        S3Bucket: !Ref ArtifactsBucket
+        S3Key: "lambda.zip"
 
   # The permissions attached to the lambda that allow it to talk to DynamoDB and produce logs to CloudWatch
   DropTokenRole:
@@ -118,7 +233,7 @@ Resources:
           - |
             openapi: "3.0.1"
             info:
-              title: "98point6-3"
+              title: "98point6-hw-dt"
               description: "An API interface to facilitate a game session of drop token to back\
                 \ end services."
               version: "2020-08-19T23:44:29Z"
