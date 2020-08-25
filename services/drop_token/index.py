@@ -1,11 +1,10 @@
-import json
-
 import os
 import boto3
 
 # Custom libraries
-from utilities.errors import MalformedRequest, NotFound
+from utilities.errors import MalformedRequest, NotFound, Conflict, GameFinished
 from DropTokenSession import DropTokenSession
+from utilities.Validation import Validation
 
 # Caching area
 dynamodb = boto3.resource('dynamodb')
@@ -17,6 +16,16 @@ def lambda_handler(event, _):
     dt_session = DropTokenSession(table, event)
 
     try:
+        # GENERAL Validations, these will raise specific errors that will be rendered with the correct status code
+        # VALIDATE: that game exists if accessing a resource that requires a game ID
+        validate = Validation(event)
+        if 'gameId' in event:
+            game_info = dt_session.get_game()
+            validate.set_game_info(game_info)  # Giving the validation class access to the game data
+
+        # VALIDATE: Player is part of the game
+        validate.player_in_game()
+
         # ROUTES and RESPONSES
         if event['resource'] == '/drop_token':
             # Creating a game
@@ -41,17 +50,32 @@ def lambda_handler(event, _):
 
         elif event['resource'] == '/drop_token/{gameId}/moves':
             if event['method'] == 'GET':
-                # Optional 'start' and 'until' query string parameters TODO:
-                print(event)
-                return 'All moves'
+                # Validate if we received the OPTIONAL query string parameters. Both must be present
+                if 'start' in event and 'until' in event:
+                    validate.unsigned_integer_values(event['start'], event['until'])
+                    validate.valid_query_range(event['start'], event['until'])
+
+                    moves = dt_session.retrieve_moves(int(event['start']), int(event['until']))
+                # Otherwise, show them all the moves for the game
+                else:
+                    moves = dt_session.retrieve_moves()
+
+                return {
+                    "moves": moves
+                }
 
         elif event['resource'] == '/drop_token/{gameId}/moves/{move_number}':
             if event['method'] == 'GET':
                 return 'Specific move'
 
         elif event['resource'] == '/drop_token/{gameId}/{playerId}':
+            # VALIDATE: Game is not in 'DONE' state
+            validate.game_is_active()
+
+            # Player is a sore loser or forgot to feed the cat, they are leaving the game, an entry in moves is recorded
             if event['method'] == 'DELETE':
-                return 'Player terminated session'
+                dt_session.quit_game()
+                return ''
 
             # Player is making a move! This is where the fun happens!
             elif event['method'] == 'POST':
@@ -69,23 +93,20 @@ def lambda_handler(event, _):
             "reason": "NOT_FOUND",
             "message": str(e)
         })
-
-    return "Test"
-
-
-
-
-# b = [
-#     [1, None, 0, None],
-#     [0, None, None, 1],
-#     [1, 1, 1, 0],
-#     [1, 1, 0, 1]
-# ]
-# # drop_token = DropToken(b)
-# #
-# # res = drop_token.validate_move(0)
-# # print(res)
-#
-# d = DropToken(b)
-# d.set_move(1)
-# print(d.get_win_state())
+    except Conflict as e:
+        raise Exception({
+            "reason": "CONFLICT",
+            "message": str(e)
+        })
+    except GameFinished as e:
+        raise Exception({
+            "reason": "GONE",
+            "message": str(e)
+        })
+    # General exception case for anything I can't catch, so we don't release important information
+    except Exception as e:
+        print(str(e))  # Normally would do a log level here
+        raise Exception({
+            "reason": "Unhandled Exception",
+            "message": "See logs for details."
+        })

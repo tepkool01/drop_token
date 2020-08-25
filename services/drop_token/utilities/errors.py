@@ -4,3 +4,11 @@ class MalformedRequest(Exception):
 
 class NotFound(Exception):
     pass
+
+
+class Conflict(Exception):
+    pass
+
+
+class GameFinished(Exception):
+    pass

@@ -2,7 +2,7 @@ import uuid
 from boto3.dynamodb.conditions import Key, Attr
 
 from utilities.GameState import GameState
-from utilities.errors import NotFound
+from utilities.errors import NotFound, Conflict
 from DropTokenGame import DropTokenGame
 
 
@@ -13,6 +13,7 @@ class DropTokenSession(object):
     def __init__(self, db, event):
         self.db = db
         self.event = event
+        self.game_data = None
 
     def create_game(self) -> str:
         """
@@ -52,75 +53,124 @@ class DropTokenSession(object):
         return game_ids
 
     def get_game(self) -> dict:
+        """
+        Retrieves the game, and will throw a 404 error if it cannot locate the game ID
+        :return: dict of all game data (unparsed)
+        """
         try:
             response = self.db.query(
                 KeyConditionExpression=Key('gameId').eq(self.event['gameId'])
             )
+            self.game_data = response['Items'][0]
             return response['Items'][0]
-        except Exception as e:
+        except Exception as _:
             raise NotFound("Game not found.")
 
+    def retrieve_moves(self, start: int = '', until: int = '') -> []:
+        """
+        Retrieves the game moves, with optional query string parameters that can select a subset of moves in the array
+        :param start: the starting position of the slice of the moves array
+        :param until: the ending position of the slice array
+        :return: [] - All moves or subset of moves played
+        """
+        return self.game_data['moves'][start:until]
+
+    def quit_game(self) -> None:
+        """
+        User selects to quit the game, which posts a move without a column and a QUIT 'type'
+        :return: Nothing
+        """
+        # Append new move to move array (potentially make 'moves' a model)
+        self.game_data['moves'].append({
+            'type': 'QUIT',
+            'player': str(self.event['playerId'])
+        })
+        # Update game state and moves array
+        self.db.update_item(
+            Key={'gameId': self.event['gameId']},
+            UpdateExpression="set moves=:m, #st=:s",
+            ExpressionAttributeValues={
+                ':m': self.game_data['moves'],
+                ':s': GameState.COMPLETE.val()
+            },
+            ExpressionAttributeNames={
+                "#st": "state"
+            }
+        )
+
     def create_move(self):
-        # Retrieve current game session
-        game_data = self.get_game()
+        """
+        Creates a move to be saved into the database. The move is evaluated on whether or not it is the winning move
+        :return: {} - Reference to the location of the move (part of a URL to invoke via the API)
+        """
+        # Retrieve latest move number and player, validate that it is in fact the person's turn
+        last_player, num = self.get_latest_move()
+        if last_player == self.event['playerId']:
+            raise Conflict("It is not this player's turn yet.")
 
-        # Get board array, and set to None so game machine can create it
-        board_state = game_data['board_state'] if 'board_state' in game_data else None
-
-        if self.event['playerId'] not in game_data['players']:
-            raise NotFound('Player is not part of this game.')
-
-        # todo: check for if it is not their turn
-        current_player_token = 0 if game_data['players'][0] == self.event['playerId'] else 1
-
-        drop_token = DropTokenGame(board_state, int(game_data['columns']), int(game_data['rows']))
-        drop_token.set_player(current_player_token)
-        drop_token.set_move(self.event['body']['column'])
-
-        # todo: Check only after >= 8 moves made
-        win_state = drop_token.get_win_state()
-        winner = ''
-        state = GameState.ACTIVE.val()
-
-        if win_state is True:
-            winner = self.event['playerId']
-            state = GameState.COMPLETE.val()
-
-        game_data['moves'].append({
+        # Append move to game session data
+        self.game_data['moves'].append({
             "type": "MOVE",
             "player": self.event['playerId'],
             "column": self.event['body']['column']
         })
-        _, num = self.get_latest_move(game_data)
 
+        # Retrieve the resultant state of the move just made
+        board_state, winner, state = self.get_win_state()
+
+        # Update the database accordingly
         self.db.update_item(
             Key={'gameId': self.event['gameId']},
             UpdateExpression="set moves=:m, #st=:s, winner=:w, board_state=:b",
             ExpressionAttributeValues={
-                ':m': game_data['moves'],
+                ':m': self.game_data['moves'],
                 ':s': state,
                 ':w': winner,
-                ':b': drop_token.board_state
+                ':b': board_state
             },
             ExpressionAttributeNames={
                 "#st": "state"
-            },
-            ReturnValues="UPDATED_NEW"
+            }
         )
         return {
             'move': f"{self.event['gameId']}/moves/{num}"
         }
 
-    @staticmethod
-    def get_latest_move(game_data):
-        count = len(game_data['moves'])
+    def get_win_state(self):
+        """
+        Validates the current state of the board to determine if the board has entered in a win condition
+        :return: Tuple - board state, winning player (if any), and game state (i.e. DONE, IN_PROGRESS)
+        """
+        # Get board array, and set to None so game machine can create it
+        board_state = self.game_data['board_state'] if 'board_state' in self.game_data else None
+
+        # Designate the player as either 0 or 1, based on their position in the array
+        current_player_token = 0 if self.game_data['players'][0] == self.event['playerId'] else 1
+
+        # Instantiate a model of the game, so we can check for a win state
+        dt = DropTokenGame(board_state, int(self.game_data['columns']), int(self.game_data['rows']))
+        dt.set_player(current_player_token)
+        dt.set_move(self.event['body']['column'])
+
+        # Perform check only if there are the required amount of moves to win
+        if len(self.game_data['moves']) >= len(self.game_data['players']) * dt.win_length:
+            win_state = dt.get_win_state()
+        else:
+            win_state = False
+
+        return (dt.board_state, self.event['playerId'], GameState.COMPLETE.val()) if win_state is True \
+            else (dt.board_state, '', GameState.ACTIVE.val())
+
+    def get_latest_move(self):
+        """
+        Retrieves the last player to make a move and the total count of moves made
+        :return: Tuple - last player ID, current total move count
+        """
+        count = len(self.game_data['moves'])
         # Check if this is the first move being made
         if count > 0:
-            last_player = game_data['moves'][count-1]['player']
+            last_player = self.game_data['moves'][count-1]['player']
         else:
             last_player = ''
 
         return last_player, count
-
-    def quit_game(self):
-        pass
