@@ -548,9 +548,13 @@ Resources:
                       items:
                         type: "string"
                     columns:
+                      maximum: 20
+                      minimum: 2
                       type: "integer"
                       format: "int32"
                     rows:
+                      maximum: 20
+                      minimum: 2
                       type: "integer"
                       format: "int32"
                 RequestCreateMove:
