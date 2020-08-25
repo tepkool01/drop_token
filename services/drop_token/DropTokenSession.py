@@ -73,7 +73,11 @@ class DropTokenSession(object):
         :param until: the ending position of the slice array
         :return: [] - All moves or subset of moves played
         """
-        return self.game_data['moves'][start:until]
+        # Takes a slice of the moves, if start and until are blank, it selects the whole array
+        moves = self.game_data['moves'][start:until]
+        if len(moves) == 0:
+            raise NotFound("No moves found.")
+        return moves
 
     def quit_game(self) -> None:
         """
