@@ -3,8 +3,14 @@ This infrastructure and code will allow for game sessions to validate moves and 
 
 ### Pre-requisites
 - An active AWS account with write access to API Gateway, DynamoDB, Lambda, CloudFormation, and IAM
+  - Sometimes you need permissions access to things like KMS for environmental variables encryption. Try to use the highest permission you can to deploy the infrastructure. Worst case scenario, use your personal account with admin access, OR just simply use the **existing** location URL to run tests.
 - This repo cloned or downloaded to your local machine
 - Some basic knowledge of AWS (s3 and cloudformation preferred)
+
+### Existing Location
+- **Base URL**: https://t9r08qr6f7.execute-api.us-east-1.amazonaws.com/dev
+  - *Your base URL will be different than mine, if you deploy it in your AWS environment*
+- Sample Request to get all game IDs: GET https://t9r08qr6f7.execute-api.us-east-1.amazonaws.com/dev/drop_token
 
 ### Installation Steps (GUI / AWS Console way)
 #### TLDR
